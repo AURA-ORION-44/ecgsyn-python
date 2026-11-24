@@ -1,5 +1,5 @@
 
-import pylab
+import matplotlib.pyplot as plt
 
 import math
 import numpy as np
@@ -47,7 +47,7 @@ http://www.physionet.org/ - please report any bugs to the authors above.
 def ecgsyn(sfecg=256,
            N=256,
            anoise=0,
-           hrmean=100,
+           hrmean=60,
            hrstd=1,
            lfhfratio=0.6,
            sfint=512,
@@ -293,13 +293,101 @@ def desrivecgsyn(y0, t, flag, rr, sfint, ti, ai, bi):
     return [dx1dt, dx2dt, dx3dt]
 
 def main():
-    print("Hello from try-scipy!")
-    s, peaks = ecgsyn()
-    pylab.plot(s)
-    pylab.xlabel('time en ms')
-    pylab.ylabel('U en volts')
-    pylab.title('Heart beat signal')
-    pylab.show()
+    sfecg=256
+    N=3
+    anoise=0
+    hrmean=60
+    hrstd=1
+    lfhfratio=0.6
+    sfint=512
+    ti=[-70, -15, 0, 15, 100]
+    ai=[1.2, -5, 30, -7.5, 0.75] # PQRST
+    bi=[0.25, 0.1, 0.1, 0.1, 0.4] # PQRST
+
+    s, peaks = ecgsyn(sfecg, N, anoise, hrmean, hrstd, lfhfratio, sfint, ti, ai, bi)
+
+    # Time axis in seconds
+    time = np.arange(len(s)) / sfecg
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=(16, 5))
+
+    # ECG waveform
+    ax.plot(
+        time,
+        s,
+        color='#B22222',
+        linewidth=1.4,
+        label='ECG signal'
+    )
+
+    # ECG paper-like grid
+    ax.set_xticks(np.arange(0, time[-1], 0.2))
+    ax.set_xticks(np.arange(0, time[-1], 0.04), minor=True)
+
+    ax.set_yticks(np.arange(-0.4, 1.21, 0.2))
+    ax.set_yticks(np.arange(-0.4, 1.21, 0.04), minor=True)
+
+    ax.grid(which='major', color='#E6A0A0', linewidth=0.4)
+    ax.grid(which='minor', color='#F5DADA', linewidth=0.2)
+
+    # Identify PQRST peaks
+    peak_colors = {
+        0: '#2878B5',  # P
+        1: '#E69F00',  # Q
+        2: '#D62728',  # R
+        3: '#2CA02C',  # S
+        4: '#9467BD'   # T
+    }
+
+    peak_labels = {
+        0: 'P',
+        1: 'Q',
+        2: 'R',
+        3: 'S',
+        4: 'T'
+    }
+
+    for peak_type in range(5):
+
+        indices = np.where(peaks == peak_type)[0]
+
+        ax.scatter(
+            time[indices],
+            s[indices],
+            color=peak_colors[peak_type],
+            s=25,
+            zorder=5,
+            label=peak_labels[peak_type]
+        )
+
+    # Labels and title
+    ax.set_title(
+        'Synthetic Electrocardiogram (ECG)',
+        fontsize=17,
+        fontweight='bold',
+        pad=15
+    )
+
+    ax.set_xlabel('Time (seconds)', fontsize=12)
+    ax.set_ylabel('Normalized ECG amplitude', fontsize=12)
+
+    # Axis limits
+    ax.set_xlim(0, time[-1])
+    ax.set_ylim(-1.5, 2.5)
+
+
+    # Styling
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    plt.savefig(
+    "synthetic_ECG.png",
+    dpi=300,
+    bbox_inches="tight"
+    )
+
+
 
 
 if __name__ == "__main__":
