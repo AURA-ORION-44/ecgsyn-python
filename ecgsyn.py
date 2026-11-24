@@ -388,8 +388,278 @@ def main():
     )
 
 
+def interactive_ecg():
+
+    import matplotlib.pyplot as plt
+    from matplotlib.widgets import Slider, Button
+    import numpy as np
+
+    # ----------------------------------
+    # Initial parameters
+    # ----------------------------------
+
+    params = {
+        "N": 20,
+        "anoise": 0.0,
+        "hrmean": 120,
+        "hrstd": 1.0,
+        "lfhfratio": 0.6,
+        "sfecg": 256,
+        "sfint": 512
+    }
+
+    ai = [1.2, -5, 30, -7.5, 0.75]
+
+    # ----------------------------------
+    # Generate initial ECG
+    # ----------------------------------
+
+    def generate():
+
+        s, peaks = ecgsyn(
+            sfecg=params["sfecg"],
+            N=params["N"],
+            anoise=params["anoise"],
+            hrmean=params["hrmean"],
+            hrstd=params["hrstd"],
+            lfhfratio=params["lfhfratio"],
+            sfint=params["sfint"],
+            ai=ai
+        )
+
+        t = np.arange(len(s)) / params["sfecg"]
+
+        return t, s, peaks
+
+    t, s, peaks = generate()
+
+    # ----------------------------------
+    # Figure
+    # ----------------------------------
+
+    fig, ax = plt.subplots(figsize=(15, 7))
+
+    plt.subplots_adjust(
+        left=0.12,
+        bottom=0.48,
+        right=0.95,
+        top=0.88
+    )
+
+    fig.suptitle(
+        "Interactive ECGSYN Simulator",
+        fontsize=18,
+        fontweight="bold"
+    )
+
+    # ----------------------------------
+    # ECG plot
+    # ----------------------------------
+
+    line, = ax.plot(
+        t,
+        s,
+        color="#B22222",
+        linewidth=1.2
+    )
+
+    ax.set_title("Synthetic ECG")
+    ax.set_xlabel("Time (seconds)")
+    ax.set_ylabel("Amplitude (normalized)")
+
+    ax.grid(which="major", color="#E6A0A0")
+    ax.grid(which="minor", color="#F5DADA")
+
+    ax.minorticks_on()
+
+    ax.set_ylim(-1, 2)
+
+    # ----------------------------------
+    # Peak markers
+    # ----------------------------------
+
+    peak_colors = [
+        "#2878B5",
+        "#E69F00",
+        "#D62728",
+        "#2CA02C",
+        "#9467BD"
+    ]
+
+    peak_labels = ["P", "Q", "R", "S", "T"]
+
+    markers = []
+
+    for i in range(5):
+
+        indices = np.where(peaks == i)[0]
+
+        marker = ax.scatter(
+            t[indices],
+            s[indices],
+            color=peak_colors[i],
+            s=25,
+            label=peak_labels[i]
+        )
+
+        markers.append(marker)
+
+    ax.legend(loc="upper right", ncol=5)
+
+    # ----------------------------------
+    # Slider creation helper
+    # ----------------------------------
+
+    sliders = {}
+
+    def create_slider(name, label, position, minimum, maximum, value):
+
+        slider_ax = fig.add_axes(position)
+
+        slider = Slider(
+            slider_ax,
+            label,
+            minimum,
+            maximum,
+            valinit=value
+        )
+
+        sliders[name] = slider
+
+    # ----------------------------------
+    # Physiological parameter sliders
+    # ----------------------------------
+
+    create_slider(
+        "hrmean", "Heart rate (BPM)",
+        [0.15, 0.39, 0.7, 0.025],
+        40, 180, 100
+    )
+
+    create_slider(
+        "hrstd", "HR standard deviation",
+        [0.15, 0.34, 0.7, 0.025],
+        0, 10, 1
+    )
+
+    create_slider(
+        "lfhfratio", "LF/HF ratio",
+        [0.15, 0.29, 0.7, 0.025],
+        0.1, 3, 0.6
+    )
+
+    create_slider(
+        "anoise", "Noise amplitude",
+        [0.15, 0.24, 0.7, 0.025],
+        0, 0.5, 0
+    )
+
+    # ----------------------------------
+    # PQRST amplitude sliders
+    # ----------------------------------
+
+    amplitude_ranges = [
+        (-5, 5),
+        (-15, 0),
+        (5, 50),
+        (-20, 0),
+        (-5, 5)
+    ]
+
+    for i, wave in enumerate(peak_labels):
+
+        y = 0.17 - i * 0.035
+
+        create_slider(
+            f"wave_{wave}",
+            f"{wave} amplitude",
+            [0.15, y, 0.7, 0.02],
+            amplitude_ranges[i][0],
+            amplitude_ranges[i][1],
+            ai[i]
+        )
+
+    # ----------------------------------
+    # Update function
+    # ----------------------------------
+
+    def update(value):
+
+        for name in ["hrmean", "hrstd", "lfhfratio", "anoise"]:
+
+            params[name] = sliders[name].val
+
+        for i, wave in enumerate(peak_labels):
+
+            ai[i] = sliders[f"wave_{wave}"].val
+
+        try:
+
+            t, s, peaks = generate()
+
+            line.set_data(t, s)
+
+            # Update peak markers
+            for i in range(5):
+
+                indices = np.where(peaks == i)[0]
+
+                markers[i].set_offsets(
+                    np.column_stack((t[indices], s[indices]))
+                    if len(indices) > 0
+                    else np.empty((0, 2))
+                )
+
+            ax.set_xlim(0, t[-1])
+
+            ax.set_ylim(
+                min(-1, np.min(s) - 0.2),
+                max(2, np.max(s) + 0.2)
+            )
+
+            fig.canvas.draw_idle()
+
+        except Exception as e:
+
+            print("ECG generation error:", e)
+
+    # ----------------------------------
+    # Connect sliders
+    # ----------------------------------
+
+    for slider in sliders.values():
+
+        slider.on_changed(update)
+
+    # ----------------------------------
+    # Reset button
+    # ----------------------------------
+
+    reset_ax = fig.add_axes([0.82, 0.05, 0.12, 0.05])
+
+    reset_button = Button(
+        reset_ax,
+        "Reset"
+    )
+
+    def reset(event):
+
+        sliders["hrmean"].reset()
+        sliders["hrstd"].reset()
+        sliders["lfhfratio"].reset()
+        sliders["anoise"].reset()
+
+        for wave in peak_labels:
+
+            sliders[f"wave_{wave}"].reset()
+
+    reset_button.on_clicked(reset)
+
+    plt.show()
+
+
 
 
 if __name__ == "__main__":
-    main()
+    interactive_ecg()
 
