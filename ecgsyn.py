@@ -391,6 +391,9 @@ def main():
     )
 
 
+def calc_N(hrmean,time_to_draw):
+    return max(np.ceil(hrmean/60*time_to_draw),3)
+
 def interactive_ecg():
 
     import matplotlib.pyplot as plt
@@ -402,13 +405,14 @@ def interactive_ecg():
     # ----------------------------------
 
     params = {
-        "N": 20,
+        "time_to_draw":2,
         "anoise": 0.0,
-        "hrmean": 120,
+        "hrmean": 100,
         "hrstd": 1.0,
         "lfhfratio": 0.6,
         "sfecg": 256,
-        "sfint": 512
+        "sfint": 512,
+        "N": calc_N(120,5)
     }
 
     ai = [1.2, -5, 30, -7.5, 0.75]
@@ -421,7 +425,7 @@ def interactive_ecg():
 
         s, peaks = ecgsyn(
             sfecg=params["sfecg"],
-            N=params["N"],
+            N=calc_N(params["hrmean"],params["time_to_draw"]),
             anoise=params["anoise"],
             hrmean=params["hrmean"],
             hrstd=params["hrstd"],
@@ -475,7 +479,12 @@ def interactive_ecg():
 
     ax.minorticks_on()
 
-    ax.set_ylim(-1, 2)
+    ax.set_xlim(0, params["time_to_draw"])
+
+    ax.set_ylim(
+        min(-1, np.min(s) - 0.2),
+        max(2, np.max(s) + 0.2)
+    )
 
     # ----------------------------------
     # Peak markers
@@ -534,27 +543,33 @@ def interactive_ecg():
     # ----------------------------------
 
     create_slider(
-        "hrmean", "Heart rate (BPM)",
+        "time_to_draw", "Window of time (s)",
         [0.15, 0.39, 0.7, 0.025],
-        40, 180, 100
+        0.1, 10, params["time_to_draw"]
+    )
+
+    create_slider(
+        "hrmean", "Heart rate (BPM)",
+        [0.15, 0.34, 0.7, 0.025],
+        40, 180, params["hrmean"]
     )
 
     create_slider(
         "hrstd", "HR standard deviation",
-        [0.15, 0.34, 0.7, 0.025],
-        0, 10, 1
+        [0.15, 0.29, 0.7, 0.025],
+        0, 10, params["hrstd"]
     )
 
     create_slider(
         "lfhfratio", "LF/HF ratio",
-        [0.15, 0.29, 0.7, 0.025],
-        0.1, 3, 0.6
+        [0.15, 0.24, 0.7, 0.025],
+        0.1, 3, params["lfhfratio"]
     )
 
     create_slider(
         "anoise", "Noise amplitude",
-        [0.15, 0.24, 0.7, 0.025],
-        0, 0.5, 0
+        [0.15, 0.19, 0.7, 0.025],
+        0, 0.5, params["anoise"]
     )
 
     # ----------------------------------
@@ -562,16 +577,16 @@ def interactive_ecg():
     # ----------------------------------
 
     amplitude_ranges = [
-        (-5, 5),
-        (-15, 0),
-        (5, 50),
-        (-20, 0),
-        (-5, 5)
+        (-20, 30),
+        (-20, 30),
+        (-20, 50),
+        (-20, 30),
+        (-20, 30)
     ]
 
     for i, wave in enumerate(peak_labels):
 
-        y = 0.17 - i * 0.035
+        y = 0.12 - i * 0.035
 
         create_slider(
             f"wave_{wave}",
@@ -588,7 +603,7 @@ def interactive_ecg():
 
     def update(value):
 
-        for name in ["hrmean", "hrstd", "lfhfratio", "anoise"]:
+        for name in ["hrmean", "hrstd", "lfhfratio", "anoise", "time_to_draw"]:
 
             params[name] = sliders[name].val
 
@@ -613,7 +628,7 @@ def interactive_ecg():
                     else np.empty((0, 2))
                 )
 
-            ax.set_xlim(0, t[-1])
+            ax.set_xlim(0, params["time_to_draw"])
 
             ax.set_ylim(
                 min(-1, np.min(s) - 0.2),
@@ -638,7 +653,7 @@ def interactive_ecg():
     # Reset button
     # ----------------------------------
 
-    reset_ax = fig.add_axes([0.82, 0.05, 0.12, 0.05])
+    reset_ax = fig.add_axes([0.92, 0.05, 0.05, 0.05])
 
     reset_button = Button(
         reset_ax,
@@ -646,7 +661,7 @@ def interactive_ecg():
     )
 
     def reset(event):
-
+        sliders["time_to_draw"].reset()
         sliders["hrmean"].reset()
         sliders["hrstd"].reset()
         sliders["lfhfratio"].reset()
