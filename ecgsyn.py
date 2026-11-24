@@ -272,6 +272,9 @@ def desrivecgsyn(y0, t, flag, rr, sfint, ti, ai, bi):
     r0 = 1
     a0 = 1.0 - np.sqrt(y0[0] ** 2 + y0[1]**2 ) / r0
     ip = int(np.floor(t * sfint))
+    ip = np.clip(ip, 0, len(rr)-1)
+    w0 = 2 * np.pi / rr[ip]
+
     w0 = 2 * np.pi / rr[ip]
 
     fresp = 0.25
