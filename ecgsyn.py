@@ -1,11 +1,13 @@
 
+import pylab
+
 import math
 import numpy as np
-import scipy as sp
-from scipy import  pi as PI
+from scipy.fft import ifft
 import scipy.integrate as integrate
 
-J = sp.sqrt(-1)
+
+J = 1j
 
 '''
 ecgsyn implementation
@@ -45,7 +47,7 @@ http://www.physionet.org/ - please report any bugs to the authors above.
 def ecgsyn(sfecg=256,
            N=256,
            anoise=0,
-           hrmean=60,
+           hrmean=100,
            hrstd=1,
            lfhfratio=0.6,
            sfint=512,
@@ -53,12 +55,20 @@ def ecgsyn(sfecg=256,
            ai=[1.2, -5, 30, -7.5, 0.75], # PQRST
            bi=[0.25, 0.1, 0.1, 0.1, 0.4] # PQRST
            ):
+
+    # rr: rr process
+    # sfint: Internal sampling frequency[Hertz]
+    # Order of extrema: [P Q R S T]
+    # ti = angles of extrema[radians]
+    # ai = z - position of extrema
+    # bi = Gaussian width of peaks
+    
     # adjust extrema parameters for mean heart rate
     hrfact = math.sqrt(hrmean / 60)
     hrfact2 = math.sqrt(hrfact)
     bi = [b*hrfact for b in bi]
 
-    ti = [tii*PI/180 for tii in ti]
+    ti = [tii*np.pi/180 for tii in ti]
     ti = [hrfact2*ti[0], hrfact*ti[1], ti[2], hrfact*ti[3], hrfact2*ti[4]]
 
     # check that sfint is an integer multiple of sfecg
@@ -69,7 +79,7 @@ def ecgsyn(sfecg=256,
         return
 
     # define frequency parameters for rr process
-    # flo and fhi correspond to the Mayer waves and respiratory rate respectively
+    # flo and fhi correspond to the Mayer waves and ressp.PIratory rate respectively
     flo = 0.1
     fhi = 0.25
     flostd = 0.01
@@ -80,7 +90,7 @@ def ecgsyn(sfecg=256,
     trr = 1 / sampfreqrr
     tstep = 1 / sfecg
     rrmean = (60 / hrmean)
-    Nrr = 2 ** (math.ceil(sp.log2(N * rrmean / trr)))
+    Nrr = 2 ** (math.ceil(np.log2(N * rrmean / trr)))
 
     # compute rr process
     rr0 = rrprocess(flo, fhi, flostd, fhistd, lfhfratio, hrmean, hrstd, sampfreqrr, Nrr)
@@ -123,7 +133,7 @@ def ecgsyn(sfecg=256,
     #     X0[k] = solver.y
     #     k += 1
 
-    X0 = sp.integrate.odeint(desrivecgsyn, x0, Tspan, args=([], rrn, sfint, ti, ai, bi))
+    X0 = integrate.odeint(desrivecgsyn, x0, Tspan, args=([], rrn, sfint, ti, ai, bi))
 
     # downsample to required sfecg
     X = X0[::int(q)]
@@ -146,31 +156,31 @@ def ecgsyn(sfecg=256,
     return (s, ipeaks)
 
 def rrprocess(flo, fhi, flostd, fhistd, lfhfratio, hrmean, hrstd, sfrr, n):
-    w1 = 2*PI*flo
-    w2 = 2*PI*fhi
-    c1 = 2*PI*flostd
-    c2 = 2*PI*fhistd
+    w1 = 2*np.pi*flo
+    w2 = 2*np.pi*fhi
+    c1 = 2*np.pi*flostd
+    c2 = 2*np.pi*fhistd
     sig2 = 1
     sig1 = lfhfratio
     rrmean = 60/hrmean
     rrstd = 60*hrstd/(hrmean*hrmean)
 
     df = sfrr/n
-    w = np.arange(0, n)*2*PI*df
+    w = np.arange(0, n)*2*np.pi*df
     dw1 = w-w1
     dw2 = w-w2
 
-    Hw1 = sig1*sp.exp(-0.5*(dw1/c1)**2)/sp.sqrt(2*PI*c1**2)
-    Hw2 = sig2*sp.exp(-0.5*(dw2/c2)**2)/sp.sqrt(2*PI*c2**2)
+    Hw1 = sig1*np.exp(-0.5*(dw1/c1)**2)/np.sqrt(2*np.pi*c1**2)
+    Hw2 = sig2*np.exp(-0.5*(dw2/c2)**2)/np.sqrt(2*np.pi*c2**2)
     Hw = Hw1 + Hw2
     Hw0 = []
     for h in Hw[0:n//2]:
         Hw0.append(h)
     for h in Hw[n//2-1::-1]:
         Hw0.append(h)
-    Sw = [sfrr/2*sp.sqrt(h) for h in Hw0]
+    Sw = [sfrr/2*np.sqrt(h) for h in Hw0]
 
-    ph0 = 2*PI*sp.random.rand(n//2-1)
+    ph0 = 2*np.pi*np.random.rand(n//2-1)
     ph = []
     ph.append(0)
     for v in ph0:
@@ -178,10 +188,10 @@ def rrprocess(flo, fhi, flostd, fhistd, lfhfratio, hrmean, hrstd, sfrr, n):
     ph.append(0)
     for v in ph0[::-1]:
         ph.append(-v)
-    SwC = [Sw[m]*sp.exp(J*ph[m]) for m in range(len(Sw))]
-    x = (1/n)*sp.real(sp.ifft(SwC))
+    SwC = [Sw[m]*np.exp(J*ph[m]) for m in range(len(Sw))]
+    x = (1/n)*np.real(ifft(SwC))
 
-    xstd = sp.std(x)
+    xstd = np.std(x)
 
     ratio = rrstd/xstd
 
@@ -194,7 +204,7 @@ def detectpeaks(X, thetap, sfecg):
     N = len(X)
     irpeaks = np.zeros(N)
 
-    theta = [sp.arctan2(X[m][1], X[m][0]) for m in range(len(X))]
+    theta = [np.arctan2(X[m][1], X[m][0]) for m in range(len(X))]
     ind0 = -1*np.ones(N)
     for i in range(N-1):
         j = [v for v in filter(lambda x:theta[i]<= thetap[x] and thetap[x] <= theta[i+1], range(len(thetap)))]
@@ -207,7 +217,7 @@ def detectpeaks(X, thetap, sfecg):
             else:
                 ind0[i+1] = j[0]
 
-    d = sp.ceil(sfecg / 64)
+    d = np.ceil(sfecg / 64)
     d = np.max([2, d])
     ind = -1*np.ones(N)
     z = [xx[2] for xx in X]
@@ -256,28 +266,42 @@ def desrivecgsyn(y0, t, flag, rr, sfint, ti, ai, bi):
     # See IEEE Transactions On Biomedical Engineering, 50(3), 289 - 294, March 2003.
     # Contact P.McSharry(patrick AT mcsharry DOT net) or % G.D.Clifford(gari AT mit DOT edu)
 
-    xi = sp.cos(ti)
-    yi = sp.sin(ti)
-    ta = sp.arctan2(y0[1], y0[0])
+    xi = np.cos(ti)
+    yi = np.sin(ti)
+    ta = np.arctan2(y0[1], y0[0])
     r0 = 1
-    a0 = 1.0 - sp.sqrt(y0[0] ** 2 + y0[1]**2 ) / r0
-    ip = int(sp.floor(t * sfint))
-    w0 = 2 * PI / rr[ip]
+    a0 = 1.0 - np.sqrt(y0[0] ** 2 + y0[1]**2 ) / r0
+    ip = int(np.floor(t * sfint))
+    w0 = 2 * np.pi / rr[ip]
 
     fresp = 0.25
-    zbase = 0.005 * sp.sin(2 * PI * fresp * t)
+    zbase = 0.005 * np.sin(2 * np.pi * fresp * t)
 
     dx1dt = a0 * y0[0] - w0 * y0[1]
     dx2dt = a0 * y0[1] + w0 * y0[0]
 
-    # dti = np.remainder(ta - ti, 2 * PI)
+    # dti = np.remainder(ta - ti, 2 * np.pi)
     dti = [ta-tii for tii in ti]
     for m in range(len(dti)):
         if dti[m] >= 0:
-            dti[m] = np.remainder(dti[m], 2*PI)
+            dti[m] = np.remainder(dti[m], 2*np.pi)
         else:
-            dti[m] = -np.remainder(-dti[m],2*PI)
+            dti[m] = -np.remainder(-dti[m],2*np.pi)
 
     dx3dt = -np.sum([ai[m]*dti[m]*np.exp(-0.5*(dti[m]/bi[m])**2) for m in range(len(ai))]) - 1.0*(y0[2]-zbase)
 
     return [dx1dt, dx2dt, dx3dt]
+
+def main():
+    print("Hello from try-scipy!")
+    s, peaks = ecgsyn()
+    pylab.plot(s)
+    pylab.xlabel('time en ms')
+    pylab.ylabel('U en volts')
+    pylab.title('Heart beat signal')
+    pylab.show()
+
+
+if __name__ == "__main__":
+    main()
+
